@@ -47,13 +47,13 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        python -m pip install --upgrade pip
         if [ -f tools/requirements.txt ]; then
-          pip install -r tools/requirements.txt
+          python -m pip install -r tools/requirements.txt || true
         elif [ -f requirements.txt ]; then
-          pip install -r requirements.txt
-        else
-          pip install PyYAML requests openai
+          python -m pip install -r requirements.txt || true
         fi
+        python -m pip install PyYAML requests openai
 
     - name: Run Quality Gates
       shell: bash
