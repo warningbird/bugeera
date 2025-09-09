@@ -88,10 +88,39 @@ runs:
           echo "No analyzer found"; exit 1
         fi
 
+        # Do not fail by default; enforcement only if explicitly enabled via input
         if [ "${FAIL_ON}" = "policy" ] && [ -f "${OUTPUT_DIR}/policy_failed" ]; then
           echo "Policy failed"
           exit 1
         fi
+
+    - name: Log Quality Gates summary
+      shell: bash
+      env:
+        OUTPUT_DIR: ${{ inputs.output-dir }}
+      run: |
+        set -euo pipefail
+        JSON_PATH="${OUTPUT_DIR}/qg_report.json"
+        if [ ! -f "$JSON_PATH" ]; then
+          echo "::warning::Quality Gates: report not found"
+          exit 0
+        fi
+        python - <<'PY'
+import json,sys
+path=sys.argv[1]
+with open(path) as f:
+    d=json.load(f)
+s=d.get('scores',{})
+summary=f"sufficiency={s.get('sufficiency',0)}, completeness={s.get('completeness',0)}, redundancy={s.get('redundancy',0)}, resilience={s.get('resilience',0)}"
+print(f"::notice::Quality Gates scores: {summary}")
+gaps=d.get('top_gaps',[])
+if gaps:
+    for g in gaps[:3]:
+        print(f"::warning::Gap: {g}")
+else:
+    print("::notice::No top gaps detected")
+PY
+        "$JSON_PATH"
 
     - name: Upload artifacts
       if: ${{ inputs.upload-artifacts == 'true' }}
