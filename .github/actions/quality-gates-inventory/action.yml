@@ -58,7 +58,7 @@ runs:
     - name: Run Quality Gates
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
         OPENAI_API_KEY: ${{ inputs.openai-api-key }}
         FAIL_ON: ${{ inputs.fail-on }}
         OUTPUT_DIR: ${{ inputs.output-dir }}
@@ -72,8 +72,8 @@ runs:
         echo "Output: ${OUTPUT_DIR}"
         mkdir -p "${OUTPUT_DIR}"
 
-        if [ -f .github/actions/quality-gates-inventory/qg_analyzer.py ]; then
-          python .github/actions/quality-gates-inventory/qg_analyzer.py \
+        if [ -f "${GITHUB_ACTION_PATH}/qg_analyzer.py" ]; then
+          python "${GITHUB_ACTION_PATH}/qg_analyzer.py" \
             --repo-dir . \
             --output-dir "${OUTPUT_DIR}" \
             --github-repo "${GITHUB_REPO}" \
