@@ -243,6 +243,41 @@ def summarize_top_gaps(gates: List[DetectedGate]) -> List[str]:
     return gaps[:3]
 
 
+def generate_recommendations(gates: List[DetectedGate], scores: Dict[str, float], gaps: List[str]) -> List[str]:
+    recs: List[str] = []
+    categories_present = {g.category for g in gates}
+    # Baseline gates
+    baseline = ["tests", "lint", "coverage", "sast", "sca", "secrets"]
+    for cat in baseline:
+        if cat not in categories_present:
+            if cat == "sca":
+                recs.append("Add SCA scan (e.g., Trivy fs or Grype) with exit-code=1 for HIGH/CRITICAL.")
+            elif cat == "secrets":
+                recs.append("Add secrets scanning (e.g., Gitleaks) with --redact and nonzero exit on findings.")
+            elif cat == "sast":
+                recs.append("Add SAST (e.g., Semgrep or CodeQL) with policy/severity thresholds and fail-on violations.")
+            elif cat == "coverage":
+                recs.append("Collect test coverage and enforce a minimum threshold (e.g., 70%+).")
+            elif cat == "lint":
+                recs.append("Run linter with zero-warning policy (e.g., --max-warnings=0 or -Werror).")
+            elif cat == "tests":
+                recs.append("Run tests as a dedicated step with failing exit code on failures (no '|| true').")
+    # Resilience
+    if scores.get("resilience", 0.0) < 0.6:
+        recs.append("Add timeouts per job/step (timeout-minutes) and retries/backoff for flaky integrations.")
+    # Evidence hardening
+    recs.append("Upload normalized SARIF/JSON artifacts from scanners and link to findings in the report.")
+    # Branch protection
+    recs.append("Enable branch protection with required checks for critical Quality Gates.")
+    # De-duplicate
+    seen = set()
+    out: List[str] = []
+    for r in recs:
+        if r not in seen:
+            out.append(r)
+            seen.add(r)
+    return out[:10]
+
 def write_json(output_dir: Path, data: Dict[str, Any]) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     out = output_dir / "qg_report.json"
@@ -344,7 +379,7 @@ def fetch_and_analyze_run_logs(owner_repo: str, run_id: Optional[str], token: Op
 
 
 def build_json(gates: List[DetectedGate], scores: Dict[str, float], notes: List[str], branch_protection: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    return {
+    result = {
         "version": 1,
         "scores": scores,
         "gates": [
@@ -361,6 +396,9 @@ def build_json(gates: List[DetectedGate], scores: Dict[str, float], notes: List[
         "notes": notes,
         "top_gaps": summarize_top_gaps(gates),
     }
+    # Recommendations
+    result["recommendations"] = generate_recommendations(gates, scores, result["top_gaps"]) 
+    return result
 
 
 def ai_assess_quality_gates(payload: Dict[str, Any], api_key: str, model: str = "gpt-4o-mini") -> Optional[Dict[str, Any]]:

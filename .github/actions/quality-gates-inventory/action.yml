@@ -101,7 +101,7 @@ runs:
           exit 0
         fi
         echo "::group::qg_summary.json"
-        jq -c '{scores: .scores, top_gaps: (.top_gaps // []), branch_protection: (.branch_protection // null)}' "$JSON_PATH"
+        jq -c '{scores: .scores, top_gaps: (.top_gaps // []), recommendations: (.recommendations // []), branch_protection: (.branch_protection // null)}' "$JSON_PATH"
         echo "::endgroup::"
 
     # Omit Markdown printing; JSON only per requirements
