@@ -105,22 +105,14 @@ runs:
           echo "::warning::Quality Gates: report not found"
           exit 0
         fi
-        python - <<'PY'
-import json,sys
-path=sys.argv[1]
-with open(path) as f:
-    d=json.load(f)
-s=d.get('scores',{})
-summary=f"sufficiency={s.get('sufficiency',0)}, completeness={s.get('completeness',0)}, redundancy={s.get('redundancy',0)}, resilience={s.get('resilience',0)}"
-print(f"::notice::Quality Gates scores: {summary}")
-gaps=d.get('top_gaps',[])
-if gaps:
-    for g in gaps[:3]:
-        print(f"::warning::Gap: {g}")
-else:
-    print("::notice::No top gaps detected")
-PY
-        "$JSON_PATH"
+        SUMMARY=$(jq -r '"sufficiency=\(.scores.sufficiency // 0), completeness=\(.scores.completeness // 0), redundancy=\(.scores.redundancy // 0), resilience=\(.scores.resilience // 0)"' "$JSON_PATH")
+        echo "::notice::Quality Gates scores: $SUMMARY"
+        COUNT=$(jq -r '.top_gaps | length' "$JSON_PATH" 2>/dev/null || echo 0)
+        if [ "${COUNT}" -gt 0 ]; then
+          jq -r '.top_gaps[:3][] | "::warning::Gap: \(.)"' "$JSON_PATH"
+        else
+          echo "::notice::No top gaps detected"
+        fi
 
     - name: Upload artifacts
       if: ${{ inputs.upload-artifacts == 'true' }}
