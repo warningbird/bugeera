@@ -12,7 +12,7 @@ inputs:
     required: false
     default: ''
   fail-on:
-    description: '' or 'policy' to fail on policy violations
+    description: "'' or 'policy' to fail on policy violations"
     required: false
     default: ''
   output-dir:
@@ -52,6 +52,8 @@ runs:
           pip install -r tools/requirements.txt
         elif [ -f requirements.txt ]; then
           pip install -r requirements.txt
+        else
+          pip install PyYAML requests openai
         fi
 
     - name: Run Quality Gates
@@ -71,14 +73,20 @@ runs:
         echo "Output: ${OUTPUT_DIR}"
         mkdir -p "${OUTPUT_DIR}"
 
-        if [ -f tools/quality_gates_inventory.py ]; then
-          python tools/quality_gates_inventory.py \
-            --repo "${GITHUB_REPO}" \
-            --out "${OUTPUT_DIR}" \
-            ${OPENAI_API_KEY:+--openai-key "${OPENAI_API_KEY}"} \
-            ${OPENAI_MODEL:+--openai-model "${OPENAI_MODEL}"}
+        if [ -f .github/actions/quality-gates-inventory/qg_analyzer.py ]; then
+          python .github/actions/quality-gates-inventory/qg_analyzer.py \
+            --repo-dir . \
+            --output-dir "${OUTPUT_DIR}" \
+            --github-repo "${GITHUB_REPO}" \
+            --fail-on "${FAIL_ON}"
+        elif [ -f tools/qg_analyzer.py ]; then
+          python tools/qg_analyzer.py \
+            --repo-dir . \
+            --output-dir "${OUTPUT_DIR}" \
+            --github-repo "${GITHUB_REPO}" \
+            --fail-on "${FAIL_ON}"
         else
-          echo "No runner script found"; exit 1
+          echo "No analyzer found"; exit 1
         fi
 
         if [ "${FAIL_ON}" = "policy" ] && [ -f "${OUTPUT_DIR}/policy_failed" ]; then
