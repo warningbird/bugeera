@@ -1,6 +1,7 @@
 name: Quality Gates Inventory
 description: Run bugeera quality gates
 author: warningbird
+
 inputs:
   github-token:
     description: GitHub token
@@ -46,7 +47,12 @@ runs:
     - name: Install deps
       shell: bash
       run: |
-        pip install -r tools/requirements.txt || pip install -r requirements.txt || true
+        set -euo pipefail
+        if [ -f tools/requirements.txt ]; then
+          pip install -r tools/requirements.txt
+        elif [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        fi
 
     - name: Run Quality Gates
       shell: bash
@@ -65,19 +71,19 @@ runs:
         echo "Output: ${OUTPUT_DIR}"
         mkdir -p "${OUTPUT_DIR}"
 
-        # пример вызова вашего инвентори-скрипта
-        python tools/quality_gates_inventory.py \
-          --repo "${GITHUB_REPO}" \
-          --out "${OUTPUT_DIR}" \
-          ${OPENAI_API_KEY:+--openai-key "${OPENAI_API_KEY}"} \
-          ${OPENAI_MODEL:+--openai-model "${OPENAI_MODEL}"}
+        if [ -f tools/quality_gates_inventory.py ]; then
+          python tools/quality_gates_inventory.py \
+            --repo "${GITHUB_REPO}" \
+            --out "${OUTPUT_DIR}" \
+            ${OPENAI_API_KEY:+--openai-key "${OPENAI_API_KEY}"} \
+            ${OPENAI_MODEL:+--openai-model "${OPENAI_MODEL}"}
+        else
+          echo "No runner script found"; exit 1
+        fi
 
-        # провал по policy
-        if [ "${FAIL_ON}" = "policy" ]; then
-          if [ -f "${OUTPUT_DIR}/policy_failed" ]; then
-            echo "Policy failed"
-            exit 1
-          fi
+        if [ "${FAIL_ON}" = "policy" ] && [ -f "${OUTPUT_DIR}/policy_failed" ]; then
+          echo "Policy failed"
+          exit 1
         fi
 
     - name: Upload artifacts
