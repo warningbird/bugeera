@@ -89,7 +89,7 @@ runs:
         fi
 
 
-    - name: Log Quality Gates summary
+    - name: Print qg_summary.json (compact)
       shell: bash
       env:
         OUTPUT_DIR: ${{ inputs.output-dir }}
@@ -97,32 +97,14 @@ runs:
         set -euo pipefail
         JSON_PATH="${OUTPUT_DIR}/qg_report.json"
         if [ ! -f "$JSON_PATH" ]; then
-          echo "::warning::Quality Gates: report not found"
+          echo '{"warning":"Quality Gates report not found"}'
           exit 0
         fi
-        SUMMARY=$(jq -r '"sufficiency=\(.scores.sufficiency // 0), completeness=\(.scores.completeness // 0), redundancy=\(.scores.redundancy // 0), resilience=\(.scores.resilience // 0)"' "$JSON_PATH")
-        echo "::notice::Quality Gates scores: $SUMMARY"
-        COUNT=$(jq -r '.top_gaps | length' "$JSON_PATH" 2>/dev/null || echo 0)
-        if [ "${COUNT}" -gt 0 ]; then
-          jq -r '.top_gaps[:3][] | "::warning::Gap: \(.)"' "$JSON_PATH"
-        else
-          echo "::notice::No top gaps detected"
-        fi
+        echo "::group::qg_summary.json"
+        jq -c '{scores: .scores, top_gaps: (.top_gaps // []), branch_protection: (.branch_protection // null)}' "$JSON_PATH"
+        echo "::endgroup::"
 
-    - name: Print qg_report.md
-      shell: bash
-      env:
-        OUTPUT_DIR: ${{ inputs.output-dir }}
-      run: |
-        set -euo pipefail
-        MD_PATH="${OUTPUT_DIR}/qg_report.md"
-        if [ -f "$MD_PATH" ]; then
-          echo "::group::qg_report.md"
-          cat "$MD_PATH"
-          echo "::endgroup::"
-        else
-          echo "::warning::qg_report.md not found"
-        fi
+    # Omit Markdown printing; JSON only per requirements
 
     - name: Print qg_report.json
       shell: bash
