@@ -1,6 +1,5 @@
 name: Quality Gates Inventory
 description: Run bugeera quality gates
-author: warningbird
 
 inputs:
   github-token:
@@ -20,7 +19,7 @@ inputs:
     required: false
     default: 'qg_artifacts'
   upload-artifacts:
-    description: 'true' to upload artifacts
+    description: "'true' to upload artifacts"
     required: false
     default: 'true'
   artifact-name:
