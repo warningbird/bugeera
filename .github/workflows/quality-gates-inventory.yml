@@ -1,0 +1,86 @@
+name: Quality Gates Inventory
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  analyze-quality-gates:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install PyYAML requests openai; fi
+
+      - name: Run Quality Gates Analyzer
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          FAIL_ON: ${{ inputs.fail-on || '' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+        run: |
+          python tools/qg_analyzer.py --repo-dir . --output-dir qg_artifacts --github-repo "$GITHUB_REPOSITORY" --fail-on "${FAIL_ON}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qg_artifacts
+          path: qg_artifacts/
+
+      - name: Post PR Comment
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SUMMARY=$(jq -r '.scores | "Scores - sufficiency: \(.sufficiency), completeness: \(.completeness), redundancy: \(.redundancy), resilience: \(.resilience)"' qg_artifacts/qg_report.json)
+          GAPS=$(jq -r '.top_gaps | join("\n- ")' qg_artifacts/qg_report.json)
+          if [ -n "$GAPS" ]; then GAPS="- $GAPS"; fi
+          BODY=$(cat <<'EOF'
+          ### Quality Gates Inventory
+          $SUMMARY
+
+          **Top gaps:**
+          $GAPS
+
+          See artifacts: qg_report.md and qg_report.json
+          EOF
+          )
+          gh pr comment ${{ github.event.pull_request.number }} --body "$BODY" || echo "gh CLI comment skipped"
+
+      - name: Fail on policy
+        if: ${{ always() }}
+        run: |
+          # Mirror analyzer exit behavior via report signals if needed
+          if [ "${{ inputs.fail-on || '' }}" = "policy" ]; then
+            python - <<'PY'
+import json, sys
+with open('qg_artifacts/qg_report.json') as f:
+    data=json.load(f)
+missing=[g for g in ["tests","lint","coverage","sast","sca","secrets"] if g not in {x['category'] for x in data.get('gates',[])}]
+low_res = data.get('scores',{}).get('resilience',0)<0.4
+if missing or low_res:
+    print('Policy failure due to critical gaps:')
+    for m in missing:
+        print('- missing gate:', m)
+    if low_res:
+        print('- low resilience score')
+    sys.exit(2)
+PY
+          fi
+
